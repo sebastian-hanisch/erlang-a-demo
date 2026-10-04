@@ -1,5 +1,7 @@
 # Erlang A – wenn Lkw nicht ewig warten (Streamlit-Demo)
 
+**[→ Demo live ausprobieren](https://sebastianhanisch-erlang-a-demo.streamlit.app/)**
+
 Interaktive Demo zur **Erlang-A-Schlange** (M/M/c+M): das Terminal-Gate mit c Spuren und einer gemeinsamen Schlange aus
 [mmc-queue-demo](https://github.com/sebastian-hanisch/mmc-queue-demo), jetzt mit **ungeduldigen Lkw**, die nach einer Weile
 abbrechen. **Viertes Stück der Konzepte-Linie „Warteschlangentheorie und Simulation“** im Portfolio von
@@ -89,7 +91,7 @@ Jede dieser Annahmen hebt ein Folgestück der Linie auf:
 
 | Annahme | Folgestück |
 |---|---|
-| Konstante Ankunftsrate | Wurzel-Personalregel (Halfin-Whitt), zeitvariable Ankünfte |
+| Konstante Ankunftsrate | [Wurzel-Personalregel (Halfin-Whitt)](https://github.com/sebastian-hanisch/square-root-staffing-demo), [zeitvariable Ankünfte](https://github.com/sebastian-hanisch/time-varying-arrivals-demo) |
 | Abfertigungsdauer exponentiell | M/G/1, Kingman-Näherung |
 | Unbegrenzte Schlange | M/M/c/c (Erlang B) |
 | Alle Lkw gleich wichtig | Prioritätsklassen |
