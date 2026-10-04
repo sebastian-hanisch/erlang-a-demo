@@ -94,7 +94,7 @@ Jede dieser Annahmen hebt ein Folgestück der Linie auf:
 | Konstante Ankunftsrate | [Wurzel-Personalregel (Halfin-Whitt)](https://github.com/sebastian-hanisch/square-root-staffing-demo), [zeitvariable Ankünfte](https://github.com/sebastian-hanisch/time-varying-arrivals-demo) |
 | Abfertigungsdauer exponentiell | [M/G/1, Kingman-Näherung](https://github.com/sebastian-hanisch/mg1-kingman-demo) |
 | Unbegrenzte Schlange | [M/M/c/c (Erlang B)](https://github.com/sebastian-hanisch/erlang-b-demo) |
-| Alle Lkw gleich wichtig | Prioritätsklassen |
+| Alle Lkw gleich wichtig | [Prioritätsklassen](https://github.com/sebastian-hanisch/priority-queue-demo) |
 
 Kein Folgestück: Form der Geduld über die vier Beispiele hinaus, Wiederkehrer nach dem Abbruch, Kunden mit Kenntnis der Schlangenlänge.
 

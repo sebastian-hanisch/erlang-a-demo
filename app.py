@@ -260,7 +260,7 @@ st.markdown(
 | **Konstante Ankunftsrate** | Echte Gates haben Morgenspitzen; die Gleichgewichtsformeln mit dem Tagesmittel unterschätzen die Spitze. | **[Wurzel-Personalregel (Halfin-Whitt)](https://sebastianhanisch-square-root-staffing-demo.streamlit.app/)**, **[zeitvariable Ankünfte](https://sebastianhanisch-time-varying-arrivals-demo.streamlit.app/)** |
 | **Abfertigungsdauer exponentiell** | Die Wartezeit hängt von der Streuung der Dauer ab. | **[M/G/1, Kingman-Näherung](https://sebastianhanisch-mg1-kingman-demo.streamlit.app/)** |
 | **Unbegrenzte Schlange, Abbrecher kommen nicht wieder** | Mit begrenztem Stellplatz gehen Lkw verloren; der Grenzfall „Geduld null“ ist das Verlustsystem Erlang B. Wiederkehrende Abbrecher erhöhen die Last. | **[M/M/c/c (Erlang B)](https://sebastianhanisch-erlang-b-demo.streamlit.app/)**; Wiederkehrer: kein Folgestück |
-| **Alle Lkw gleich wichtig** | Eilige Lkw brauchen Vorfahrt; das verschiebt Wartezeit und Abbrüche zwischen den Klassen. | **Prioritätsklassen** (Folgestück) |
+| **Alle Lkw gleich wichtig** | Eilige Lkw brauchen Vorfahrt; das verschiebt Wartezeit und Abbrüche zwischen den Klassen. | **[Prioritätsklassen](https://sebastianhanisch-priority-queue-demo.streamlit.app/)** |
 | **Kunden kennen die Schlange nicht** | Wer die Schlangenlänge sieht, entscheidet anders (gar nicht erst anstellen); hier hängt die Geduld nur vom Zufall ab. | kein Folgestück |
 """
 )
