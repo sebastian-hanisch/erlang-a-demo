@@ -8,7 +8,13 @@ Aufbau nach Einheiten (je Ereignistyp ein Handler, kein versteckter Zustand):
 
 Zufall nur über übergebene `SplitMix64`-Generatoren (reine Ganzzahl-Arithmetik, Portfolio-Konvention): Ankünfte, Bedienzeiten
 und Geduld haben je einen EIGENEN Strom, und die Geduld wird für JEDEN Lkw bei der Ankunft gezogen (auch wenn er sofort
-bedient wird), damit der Strom bei verschiedenen Geduld-Verteilungen im Gleichschritt bleibt."""
+bedient wird), damit der Strom bei verschiedenen Geduld-Verteilungen im Gleichschritt bleibt.
+
+Der Lauf startet leer. Die Kennzahlen, die die App gegen die Formel stellt (Abbruchquote, Wartezeit, Anteil Wartender, Auslastung,
+Zustandsverteilung), gelten für das Messfenster: nur Lkw, die frühestens zur Zeit `warm_time` ankommen, die Zeitintegrale über das
+Fenster von `warm_time` bis zur letzten Ankunft. Ohne Einschwingzeit liegt ein großes Gate (c = 50) bei kurzen Läufen weit unter dem
+Gleichgewicht (1 000 Lkw: Abbruchquote und Wartezeit rund 20 % zu niedrig, Auslastung 79 % statt 95 %). Die Pfadgrößen über den ganzen
+Lauf (`area_in_system`, `sojourns`, `time_in_state`, `trajectory`, ...) bleiben unverändert; sie tragen Little's Gesetz als Pfadidentität."""
 
 import heapq
 import math
@@ -90,23 +96,33 @@ class SimResult:
     time_in_state: dict
     n_waited: int                    # Lkw, die nicht sofort bedient wurden
     trajectory: list = field(default_factory=list)
+    # Messfenster: nur Lkw mit Ankunft ab `warm_time`, Zeitintegrale von `warm_time` bis zur letzten Ankunft
+    n_eval: int = 0                  # ausgewertete Lkw
+    eval_abandoned: int = 0
+    eval_waited: int = 0
+    eval_wait_all: float = 0.0       # Summe der Wartezeiten ALLER ausgewerteten Lkw (Abbrecher bis zum Abbruch)
+    eval_wait_served: float = 0.0    # Summe der Wartezeiten der ausgewerteten bedienten Lkw
+    eval_busy_integral: float = 0.0
+    eval_window: float = 1.0         # Länge des Messfensters (Minuten)
+    eval_time_in_state: dict = field(default_factory=dict)
 
     @property
     def abandon_rate(self):
-        return len(self.abandon_waits) / self.n_customers
+        return self.eval_abandoned / self.n_eval
 
     @property
     def share_waiting(self):
-        return self.n_waited / self.n_customers
+        return self.eval_waited / self.n_eval
 
     @property
     def mean_wait_all(self):
-        """Mittlere Wartezeit ALLER Lkw (Bediente und Abbrecher)."""
-        return (sum(self.served_waits) + sum(self.abandon_waits)) / self.n_customers
+        """Mittlere Wartezeit ALLER ausgewerteten Lkw (Bediente und Abbrecher)."""
+        return self.eval_wait_all / self.n_eval
 
     @property
     def mean_wait_served(self):
-        return sum(self.served_waits) / len(self.served_waits) if self.served_waits else 0.0
+        served = self.n_eval - self.eval_abandoned
+        return self.eval_wait_served / served if served else 0.0
 
     @property
     def mean_in_system(self):
@@ -114,7 +130,8 @@ class SimResult:
 
     @property
     def utilisation(self):
-        return self.busy_integral / (self.c * self.end_time)
+        """Mittlere Auslastung je Spur im Messfenster (weder die leere Anfangsphase noch das Auslaufen nach der letzten Ankunft)."""
+        return self.eval_busy_integral / (self.c * self.eval_window)
 
     @property
     def arrival_rate(self):
@@ -128,7 +145,8 @@ class SimResult:
 class _State:
     __slots__ = ("c", "t", "n", "queue", "busy", "events", "seq", "n_customers", "lam", "mu", "area_n", "area_q",
                  "busy_integral", "time_in_state", "status", "patience", "service_time", "arrival_time", "served_waits",
-                 "abandon_waits", "sojourns", "n_waited", "trajectory", "record")
+                 "abandon_waits", "sojourns", "n_waited", "trajectory", "record", "warm_time", "closed", "window_end", "n_eval",
+                 "eval_abandoned", "eval_waited", "eval_wait_all", "eval_wait_served", "eval_busy_integral", "eval_time_in_state")
 
 
 def _advance_clock(s, t_new):
@@ -138,13 +156,26 @@ def _advance_clock(s, t_new):
     s.area_q += max(s.n - s.c, 0) * dt
     s.busy_integral += s.busy * dt
     s.time_in_state[s.n] = s.time_in_state.get(s.n, 0.0) + dt
+    if not s.closed:                    # Messfenster [warm_time, letzte Ankunft]
+        lo = s.t if s.t > s.warm_time else s.warm_time
+        if t_new > lo:
+            s.eval_busy_integral += s.busy * (t_new - lo)
+            s.eval_time_in_state[s.n] = s.eval_time_in_state.get(s.n, 0.0) + (t_new - lo)
     s.t = t_new
+
+
+def _counted(s, cid):
+    """Gehört Lkw cid zur Auswertung (Ankunft nicht vor der Einschwingzeit)?"""
+    return s.arrival_time[cid] >= s.warm_time
 
 
 def _start_service(s, cid):
     """Kunde cid beginnt die Bedienung jetzt: Wartezeit festhalten, Abgang einplanen."""
     s.status[cid] = "served"
     s.served_waits.append(s.t - s.arrival_time[cid])
+    if _counted(s, cid):
+        s.eval_wait_all += s.t - s.arrival_time[cid]
+        s.eval_wait_served += s.t - s.arrival_time[cid]
     s.busy += 1
     s.seq += 1
     heapq.heappush(s.events, (s.t + s.service_time[cid], s.seq, DEPARTURE, cid))
@@ -157,17 +188,24 @@ def handle_arrival(s, cid, gap_rng, svc_rng, pat_rng, kind, mean_patience):
     s.service_time[cid] = svc_rng.expovariate(s.mu)
     s.patience[cid] = draw_patience(kind, mean_patience, pat_rng)
     s.n += 1
+    if _counted(s, cid):
+        s.n_eval += 1
     if s.busy < s.c:
         _start_service(s, cid)
     else:
         s.status[cid] = "waiting"
         s.n_waited += 1
+        if _counted(s, cid):
+            s.eval_waited += 1
         s.queue.append(cid)
         s.seq += 1
         heapq.heappush(s.events, (s.t + s.patience[cid], s.seq, ABANDON, cid))
     if cid + 1 < s.n_customers:
         s.seq += 1
         heapq.heappush(s.events, (s.t + gap_rng.expovariate(s.lam), s.seq, ARRIVAL, cid + 1))
+    else:
+        s.closed = True                 # letzte Ankunft: das Messfenster endet hier (danach läuft das System nur aus)
+        s.window_end = s.t
     return True
 
 
@@ -192,16 +230,21 @@ def handle_abandon(s, cid):
         return False
     s.status[cid] = "gone"
     s.abandon_waits.append(s.t - s.arrival_time[cid])
+    if _counted(s, cid):
+        s.eval_abandoned += 1
+        s.eval_wait_all += s.t - s.arrival_time[cid]
     s.sojourns += s.t - s.arrival_time[cid]
     s.n -= 1
     return True
 
 
 def simulate(c, lam, mu, mean_patience, n_customers, seed, kind="exp", record=False, gap_rng=None, svc_rng=None,
-             pat_rng=None):
+             pat_rng=None, warm_time=0.0):
     """Simuliert `n_customers` Ankünfte (Rate lam) an c Spuren mit Bedienrate mu je Spur und Geduld der Art `kind` mit Mittel
     `mean_patience` und läuft, bis alle bedient sind oder abgebrochen haben. Start leer. `record=True` schreibt die
-    Treppenkurve N(t) mit; `*_rng` ersetzen die Ströme aus `seed` (für Tests mit vorgegebenen Zahlen)."""
+    Treppenkurve N(t) mit; `*_rng` ersetzen die Ströme aus `seed` (für Tests mit vorgegebenen Zahlen). Ausgewertet werden nur Lkw,
+    die frühestens zur Zeit `warm_time` ankommen (Einschwingzeit des leeren Starts), die Zeitintegrale über das Fenster von `warm_time`
+    bis zur letzten Ankunft."""
     if gap_rng is None or svc_rng is None or pat_rng is None:
         gap_rng, svc_rng, pat_rng = streams(seed)
     s = _State()
@@ -213,6 +256,10 @@ def simulate(c, lam, mu, mean_patience, n_customers, seed, kind="exp", record=Fa
     s.patience, s.service_time, s.arrival_time = [0.0] * n_customers, [0.0] * n_customers, [0.0] * n_customers
     s.served_waits, s.abandon_waits, s.sojourns, s.n_waited = [], [], 0.0, 0
     s.trajectory, s.record = [(0.0, 0)] if record else [], record
+    s.warm_time, s.closed, s.window_end, s.n_eval = float(warm_time), False, 0.0, 0
+    s.eval_abandoned = s.eval_waited = 0
+    s.eval_wait_all = s.eval_wait_served = s.eval_busy_integral = 0.0
+    s.eval_time_in_state = {}
     heapq.heappush(s.events, (gap_rng.expovariate(lam), 0, ARRIVAL, 0))
     while s.events:
         t, _, ev, cid = heapq.heappop(s.events)
@@ -228,4 +275,6 @@ def simulate(c, lam, mu, mean_patience, n_customers, seed, kind="exp", record=Fa
         if s.record and changed:
             s.trajectory.append((t, s.n))
     return SimResult(c, n_customers, s.t, s.served_waits, s.abandon_waits, s.sojourns, s.area_n, s.area_q,
-                     s.busy_integral, s.time_in_state, s.n_waited, s.trajectory)
+                     s.busy_integral, s.time_in_state, s.n_waited, s.trajectory, s.n_eval, s.eval_abandoned, s.eval_waited,
+                     s.eval_wait_all, s.eval_wait_served, s.eval_busy_integral, max(s.window_end - s.warm_time, 1e-12),
+                     s.eval_time_in_state)

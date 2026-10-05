@@ -14,7 +14,7 @@ import streamlit as st
 import era_constants as C
 import era_formulas as F
 from era_evaluation import (formula_metrics, little_check, load_precomputed, nearest, run_live, staffing_row,
-                            state_distribution, study_cell, theta_of, window_steps)
+                            state_distribution, study_cell, theta_of, warm_time_min, window_steps)
 from era_presets import (apply_preset, bounds, init_session_state_defaults, load_permalink_settings, randomize_seed,
                          sync_query_params)
 from era_simulation import PATIENCE_KINDS, PATIENCE_LABELS, rates
@@ -99,9 +99,10 @@ with st.sidebar:
                              "ist erlaubt: Abbrecher halten die Schlange endlich.")
     patience = st.slider("Mittlere Geduld (Minuten)", *bounds("patience_slider"), key="patience_slider",
                          help="Nach so langer Wartezeit bricht ein Lkw im Mittel ab (exponentiell verteilt).")
-    n = st.select_slider("Simulierte Lkw je Lauf", options=C.N_OPTIONS, key="n_select",
-                         help="Länge des Simulationslaufs. Die mittlere Abfertigungsdauer je Spur ist fest 3 min; "
-                              "sie verschiebt nur die Zeitachse.")
+    n = st.select_slider("Ausgewertete Lkw je Lauf", options=C.N_OPTIONS, key="n_select",
+                         help="Länge des ausgewerteten Teils des Simulationslaufs. Davor läuft eine Einschwingzeit vom leeren Gate aus, "
+                              "die nicht ausgewertet wird (mindestens 30 Minuten, bei großer Geduld das Fünffache der mittleren Geduld). "
+                              "Die mittlere Abfertigungsdauer je Spur ist fest 3 min; sie verschiebt nur die Zeitachse.")
     seed = st.number_input("Zufalls-Seed", min_value=bounds("seed_input")[0], max_value=bounds("seed_input")[1],
                            step=1, key="seed_input", help="Bestimmt alle Zufallszahlen des Laufs.")
     st.button("🎲 Neuen Lauf würfeln", on_click=randomize_seed)
@@ -121,8 +122,8 @@ st.markdown("---")
 st.markdown("## ⏳ Das Gate in Zahlen")
 st.caption(
     f"{c} Spuren, je μ = {mu * 60:.0f} Lkw/h (3 min Abfertigung), Ankunftsrate λ = {lam * 60:.1f} Lkw/h, mittlere Geduld "
-    f"{patience} min, {C.fmt_int(n)} simulierte Lkw. Auslastung der Spuren: Formel {C.fmt_pct(formula['utilisation'])}, "
-    f"simuliert {C.fmt_pct(sim.utilisation)}."
+    f"{patience} min, etwa {C.fmt_int(n)} ausgewertete Lkw nach {warm_time_min(patience):.0f} min Einschwingzeit. Auslastung der "
+    f"Spuren: Formel {C.fmt_pct(formula['utilisation'])}, simuliert {C.fmt_pct(sim.utilisation)}."
 )
 l_hat, lw_hat, little_gap = little_check(sim)
 r1 = st.columns(3)
@@ -144,8 +145,9 @@ r3[2].metric("Little's Gesetz im Lauf: L gegen λ·W", "stimmt" if little_gap < 
              help=f"L = {l_hat:.4f} (Fläche unter der Kurve geteilt durch die Laufzeit), λ·W = {lw_hat:.4f} (Ankunftsrate mal "
                   "mittlere Verweilzeit aller Lkw, Abbrecher eingeschlossen). Auf jedem Lauf gleich.")
 st.caption(
-    "„Wartezeit aller Lkw“ zählt die Abbrecher mit ihrer Wartezeit bis zum Abbruch. Wie in Stück 1 bis 3 ist ein einzelner Lauf "
-    "eine Stichprobe: Er streut um die Formel; die Studie unten mittelt 20 Läufe à 50 000 Lkw."
+    "„Wartezeit aller Lkw“ zählt die Abbrecher mit ihrer Wartezeit bis zum Abbruch. Der Lauf startet mit leerem Gate; die Einschwingzeit "
+    "wird nicht ausgewertet, sonst läge ein großes Gate bei kurzen Läufen weit unter dem Gleichgewicht. Wie in Stück 1 bis 3 ist ein "
+    "einzelner Lauf eine Stichprobe: Er streut um die Formel; die Studie unten mittelt 20 Läufe à 50 000 Lkw."
 )
 
 st.markdown("### Die Schlange über der Zeit")
@@ -298,6 +300,9 @@ Spuren nicht abfertigen können.
 **Simulation.** Ereignisliste mit Ankünften, Abgängen und Abbruch-Terminen; die Geduld wird für jeden Lkw bei der Ankunft gezogen
 (eigener Zufallsstrom, SplitMix64), ein Abbruch-Termin zählt nur, wenn der Lkw dann noch wartet. Little's Gesetz gilt auf dem Pfad
 exakt: $\int_0^T N(t)\,dt$ ist die Summe der Verweilzeiten aller Lkw (bediente mit Bedienung, Abbrecher bis zum Abbruch).
+Der Lauf startet mit leerem Gate; die Kennzahlen gegen die Formel (Abbruchquote, Wartezeit, Anteil Wartender, Auslastung, Verteilung der
+Zahl im System) zählen nur Lkw, die nach der Einschwingzeit ankommen, und die Zeitmittel nur zwischen Ende der Einschwingzeit und
+letzter Ankunft. Ohne sie läge das Gate mit 50 Spuren bei kurzen Läufen (1 000 Lkw) in Abbruchquote und Wartezeit rund 20 % unter der Formel.
 
 Implementiert in `era_formulas.py` (Erlang A, Grenzfälle, Spurbedarf), `era_simulation.py` (Ereignissimulation mit Abbruch,
 Geduld-Verteilungen), `era_evaluation.py` (Kennzahlen, Studie zur Form der Geduld), `generate_precomputed.py` (vorgerechnete Studie).

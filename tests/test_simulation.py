@@ -58,18 +58,35 @@ def test_lognormal_patience_has_the_stated_coefficient_of_variation_and_uniform_
 
 def test_mini_instance_with_abandonment_by_hand(mini_streams):
     """Von Hand (siehe conftest): Bediente warten 0 / 2 / 0 (in Startreihenfolge), Lkw 2 bricht nach 1.0 ab, Ende 7.5,
-    Verweilzeiten 3 + 1 + 3 + 2 = 9 = ∫N dt, ∫Nq dt = 3, beschäftigte Spuren ∫ = 6 (Auslastung 0.8), Zeit je Zustand
-    {0: 1.5, 1: 3.5, 2: 2, 3: 0.5}; Abbruch-Termin des bedienten Lkw 3 (bei 7) bleibt ohne Wirkung."""
+    Verweilzeiten 3 + 1 + 3 + 2 = 9 = ∫N dt, ∫Nq dt = 3, beschäftigte Spuren ∫ = 6 über den ganzen Lauf, Zeit je Zustand
+    {0: 1.5, 1: 3.5, 2: 2, 3: 0.5}; Abbruch-Termin des bedienten Lkw 3 (bei 7) bleibt ohne Wirkung. Messfenster ohne Einschwingzeit
+    = [0, letzte Ankunft 5.5]: beschäftigte Spur dort 3 (Lkw 1) + 1 (Lkw 3) = 4, Auslastung 4/5.5; das Auslaufen zählt nicht."""
     gap, svc, pat = mini_streams
     r = S.simulate(1, 1.0, 1.0, 5.0, 4, seed=0, kind="uniform", record=True, gap_rng=gap, svc_rng=svc, pat_rng=pat)
     assert r.served_waits == pytest.approx([0.0, 2.0, 0.0]) and r.abandon_waits == pytest.approx([1.0])
     assert r.end_time == pytest.approx(7.5) and r.sojourns == pytest.approx(9.0)
     assert r.area_in_system == pytest.approx(9.0) and r.area_in_queue == pytest.approx(3.0)
-    assert r.busy_integral == pytest.approx(6.0) and r.utilisation == pytest.approx(0.8)
+    assert r.busy_integral == pytest.approx(6.0)
+    assert r.eval_busy_integral == pytest.approx(4.0) and r.eval_window == pytest.approx(5.5) and r.utilisation == pytest.approx(4.0 / 5.5)
     assert r.time_in_state == pytest.approx({0: 1.5, 1: 3.5, 2: 2.0, 3: 0.5})
     assert [n for _, n in r.trajectory] == [0, 1, 2, 3, 2, 1, 0, 1, 0]
     assert r.abandon_rate == pytest.approx(0.25) and r.share_waiting == pytest.approx(0.5)
     assert r.mean_wait_all == pytest.approx(0.75) and r.mean_wait_served == pytest.approx(2 / 3)
+
+
+def test_warm_up_customers_are_not_evaluated_by_hand(mini_streams):
+    """Wie die Mini-Instanz (Ankünfte bei 1 / 1.5 / 2 / 5.5), aber `warm_time` = 1.6: ausgewertet werden nur Lkw 3 und 4 (Wartezeiten 2 und 0,
+    einer wartet, keiner bricht ab: der Abbruch von Lkw 2 zählt nicht); Messfenster [1.6, 5.5] (Länge 3.9), beschäftigte Spur dort
+    2.4 (Lkw 1 von 1.6 bis 4) + 1 (Lkw 3) = 3.4, Zeit je Zustand {0: 0.5, 1: 1, 2: 0.4 + 1.5, 3: 0.5}. Die Pfadgrößen bleiben die der ganzen Läufe."""
+    gap, svc, pat = mini_streams
+    r = S.simulate(1, 1.0, 1.0, 5.0, 4, seed=0, kind="uniform", gap_rng=gap, svc_rng=svc, pat_rng=pat, warm_time=1.6)
+    assert r.n_eval == 2 and r.eval_waited == 1 and r.eval_abandoned == 0
+    assert r.eval_wait_all == pytest.approx(2.0) and r.eval_wait_served == pytest.approx(2.0)
+    assert r.abandon_rate == 0.0 and r.share_waiting == pytest.approx(0.5)
+    assert r.mean_wait_all == pytest.approx(1.0) and r.mean_wait_served == pytest.approx(1.0)
+    assert r.eval_window == pytest.approx(3.9) and r.eval_busy_integral == pytest.approx(3.4) and r.utilisation == pytest.approx(3.4 / 3.9)
+    assert r.eval_time_in_state == pytest.approx({0: 0.5, 1: 1.0, 2: 1.9, 3: 0.5})
+    assert r.busy_integral == pytest.approx(6.0) and r.sojourns == pytest.approx(9.0) and r.n_customers == 4
 
 
 def test_handle_abandon_ignores_a_customer_who_is_already_served():

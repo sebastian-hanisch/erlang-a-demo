@@ -24,10 +24,12 @@ def test_little_check_on_the_mini_instance(mini):
 
 
 def test_state_distribution_on_the_mini_instance(mini):
+    """Messfenster = [0, letzte Ankunft 5.5] (ohne Einschwingzeit): Zeit je Zustand {0: 1.5, 1: 1.5, 2: 2, 3: 0.5}; das Auslaufen
+    5.5 bis 7.5 (Zustand 1) zählt nicht mit."""
     shares, rest = E.state_distribution(mini, max_state=3)
-    assert shares == pytest.approx([0.2, 3.5 / 7.5, 2 / 7.5, 0.5 / 7.5]) and rest == pytest.approx(0.0, abs=1e-12)
+    assert shares == pytest.approx([1.5 / 5.5, 1.5 / 5.5, 2 / 5.5, 0.5 / 5.5]) and rest == pytest.approx(0.0, abs=1e-12)
     shares2, rest2 = E.state_distribution(mini, max_state=1)
-    assert rest2 == pytest.approx(2.5 / 7.5) and sum(shares2) + rest2 == pytest.approx(1.0)
+    assert rest2 == pytest.approx(2.5 / 5.5) and sum(shares2) + rest2 == pytest.approx(1.0)
 
 
 def test_window_steps_on_the_mini_trajectory(mini):
@@ -87,3 +89,31 @@ def test_precomputed_file_is_complete():
     assert pre["study_n"] == C.STUDY_N and pre["study_reps"] == C.STUDY_REPS and pre["study_patience"] == C.STUDY_PATIENCE
     for x in pre["study"]:
         assert x["reps"] == C.STUDY_REPS and set(x["kinds"]) == set(S.PATIENCE_KINDS)
+
+
+def test_warm_time_rule_and_warmup_customers():
+    """Mindestens 30 min, bei großer Geduld das Fünffache der mittleren Geduld; die Zusatz-Lkw sind die Ankünfte vor Ende der Einschwingzeit."""
+    assert E.warm_time_min(1) == 30.0 and E.warm_time_min(5) == 30.0 and E.warm_time_min(10) == 50.0 and E.warm_time_min(30) == 150.0
+    g, k, t = S.SplitMix64(3), 0, 0.0
+    while True:                                                    # Zählung am selben Ankunftsstrom von Hand
+        t += g.expovariate(0.5)
+        if t >= 30.0:
+            break
+        k += 1
+    assert E.warmup_customers(0.5, 5, 3) == k and 5 < k < 30
+    sim = E.simulate_gate(2, 0.5, 1 / 3, 5, 100, 3)
+    assert sim.n_eval == 100 and sim.n_customers == 100 + k
+
+
+def test_short_runs_of_a_big_gate_are_not_biased_low_by_the_empty_start():
+    """Messung (README): ohne Einschwingzeit lagen 1 000 Lkw an 50 Spuren bei ρ = 100 %, Geduld 5 min, im Mittel bei Auslastung 79 % statt 95 %
+    und Wartezeit rund 21 % zu niedrig; bei ρ = 150 %, Geduld 30 min waren Abbruchquote und Wartezeit rund 54 % zu niedrig. Mit Einschwingzeit
+    liegt das Mittel über 40 Läufe an der Formel (Seeds 100 bis 139)."""
+    for c, rho, pat in [(50, 100, 5), (50, 150, 30)]:
+        f = E.formula_metrics(c, rho, pat)
+        runs = [E.run_live(c, rho, pat, 1000, 100 + i, record=False) for i in range(40)]
+        assert all(r.n_eval == 1000 for r in runs)
+        mean = lambda g: sum(g(r) for r in runs) / len(runs)
+        assert mean(lambda r: r.utilisation) == pytest.approx(f["utilisation"], abs=0.01)
+        assert mean(lambda r: r.abandon_rate) == pytest.approx(f["p_abandon"], abs=0.006)
+        assert mean(lambda r: r.mean_wait_all) == pytest.approx(f["Wq"], rel=0.07)

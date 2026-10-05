@@ -8,7 +8,7 @@ from pathlib import Path
 
 import era_constants as C
 import era_formulas as F
-from era_simulation import MU, PATIENCE_KINDS, rates, simulate
+from era_simulation import MU, PATIENCE_KINDS, SplitMix64, rates, simulate
 
 PRECOMPUTED_PATH = Path(__file__).resolve().parent / "precomputed_sweep.json"
 
@@ -23,9 +23,33 @@ def formula_metrics(c, rho_pct, mean_patience):
     return F.stationary_metrics(c, lam, mu, theta_of(mean_patience))
 
 
+def warm_time_min(mean_patience):
+    """Einschwingzeit des leeren Starts in Minuten: nicht ausgewertet. Mindestens `WARM_MIN_FLOOR`, bei großer Geduld das
+    `WARM_PATIENCE_FACTOR`-Fache der mittleren Geduld."""
+    return max(C.WARM_MIN_FLOOR, C.WARM_PATIENCE_FACTOR * mean_patience)
+
+
+def warmup_customers(lam, mean_patience, seed):
+    """Zahl der Lkw, die in der Einschwingzeit ankommen und zusätzlich simuliert, aber nicht ausgewertet werden: gezählt am Ankunftsstrom
+    des Laufs (eine Kopie des Generators mit demselben Seed), damit genau die gewünschte Zahl Lkw ausgewertet wird."""
+    gap_rng, warm, t, k = SplitMix64(seed), warm_time_min(mean_patience), 0.0, 0
+    while True:
+        t += gap_rng.expovariate(lam)
+        if t >= warm:
+            return k
+        k += 1
+
+
+def simulate_gate(c, lam, mu, mean_patience, n_customers, seed, kind="exp", record=False):
+    """Ein Lauf mit Einschwingzeit: simuliert werden die Lkw der Einschwingzeit plus `n_customers`; ausgewertet werden genau die
+    `n_customers` Lkw danach."""
+    return simulate(c, lam, mu, mean_patience, n_customers + warmup_customers(lam, mean_patience, seed), seed, kind=kind, record=record,
+                    warm_time=warm_time_min(mean_patience))
+
+
 def run_live(c, rho_pct, mean_patience, n_customers, seed, kind="exp", record=True):
     lam, mu = rates(c, rho_pct)
-    return simulate(c, lam, mu, mean_patience, n_customers, seed, kind=kind, record=record)
+    return simulate_gate(c, lam, mu, mean_patience, n_customers, seed, kind=kind, record=record)
 
 
 def little_check(sim):
@@ -37,9 +61,10 @@ def little_check(sim):
 
 
 def state_distribution(sim, max_state=C.MAX_STATE_SHOWN):
-    """Anteil der Zeit mit genau n im System (n = 0 … max_state); der Rest darüber wird zusammengefasst."""
-    total = sum(sim.time_in_state.values())
-    shares = [sim.time_in_state.get(n, 0.0) / total for n in range(max_state + 1)]
+    """Anteil der Zeit mit genau n im System (n = 0 … max_state) im Messfenster (nach der Einschwingzeit); der Rest darüber wird
+    zusammengefasst."""
+    total = sum(sim.eval_time_in_state.values())
+    shares = [sim.eval_time_in_state.get(n, 0.0) / total for n in range(max_state + 1)]
     return shares, max(0.0, 1.0 - sum(shares))
 
 
@@ -100,7 +125,7 @@ def patience_study(c, rho_pct, mean_patience, n, reps, seed_base):
     for kind in PATIENCE_KINDS:
         p_ab, wq = [], []
         for r in range(reps):
-            sim = simulate(c, lam, mu, mean_patience, n, seed_base + 97 * r, kind=kind)
+            sim = simulate_gate(c, lam, mu, mean_patience, n, seed_base + 97 * r, kind=kind)
             p_ab.append(sim.abandon_rate)
             wq.append(sim.mean_wait_all)
         out[kind] = {"p_ab": statistics.fmean(p_ab), "p_ab_sd": statistics.stdev(p_ab),

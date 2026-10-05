@@ -22,8 +22,8 @@ Formeln dagegen, dass die Geduld nicht exponentiell verteilt ist?
 
 - **Modell:** Poisson-Ankünfte (λ), exponentielle Abfertigung (μ je Spur, 3 min Mittel), c Spuren, eine FIFO-Schlange, Geduld mit
   Mittel 1/θ (Voreinstellung 5 min). Auslastung je Spur ρ = λ/(cμ), **auch über 100 %**. Regler: Spuren (1–50), Auslastung
-  (10–150 %), mittlere Geduld (1–30 min), Lauflänge (1 000–50 000 Lkw), Zufalls-Seed. Voreinstellung: 10 Spuren, ρ = 95 %,
-  Geduld 5 min, 10 000 Lkw.
+  (10–150 %), mittlere Geduld (1–30 min), ausgewertete Lkw je Lauf (1 000–50 000), Zufalls-Seed. Voreinstellung: 10 Spuren,
+  ρ = 95 %, Geduld 5 min, 10 000 ausgewertete Lkw.
 - **Formeln** (`era_formulas.py`): Geburts-Sterbe-Kette mit Sterberate min(n, c)·μ + max(n − c, 0)·θ, in Logarithmen gerechnet
   (kein Überlauf bei großen c). Abbruchquote P(ab) = θ·Lq/λ, mittlere Wartezeit **aller** Lkw Wq = Lq/λ (Little, Abbrecher bis zum
   Abbruch eingerechnet), Wahrscheinlichkeit zu warten, Durchsatz, Auslastung; Grenzwert 1 − 1/ρ für sehr viele Spuren; Spurbedarf
@@ -32,7 +32,9 @@ Formeln dagegen, dass die Geduld nicht exponentiell verteilt ist?
 - **Simulation** (`era_simulation.py`): Ereignisliste mit Ankünften, Abgängen und Abbruch-Terminen, je Ereignistyp ein Handler; Zufall
   aus SplitMix64 mit getrennten Strömen für Ankünfte, Bedienzeiten und Geduld (für jeden Lkw bei der Ankunft gezogen, damit der
   Strom bei jeder Verteilung gleich weiterläuft). Geduld exponentiell, gleichverteilt (0 bis 2·Mittel), fest oder lognormal
-  (Variationskoeffizient 1.5), alle mit demselben Mittel.
+  (Variationskoeffizient 1.5), alle mit demselben Mittel. **Einschwingzeit:** Der Lauf startet leer; ausgewertet (Abbruchquote, Wartezeit,
+  Anteil Wartender, Zustandsverteilung) werden nur Lkw, die nach der Einschwingzeit max(30 min, 5 × mittlere Geduld) ankommen, die
+  Auslastung zwischen diesem Zeitpunkt und der letzten Ankunft. Die Pfadgrößen über den ganzen Lauf (Treppenkurve, Little) bleiben unverändert.
 - **Vorgerechnete Studie** (`generate_precomputed.py` → `precomputed_sweep.json`, knapp zwei Minuten parallel): 3 Spurzahlen × 5
   Auslastungen × 4 Geduld-Verteilungen, je 20 Läufe à 50 000 Lkw. Live läuft nur der gewählte Einzellauf.
 
@@ -47,8 +49,8 @@ Alle Zahlen stehen in `tests/test_claims.py`; Zeiten bei 3 min Abfertigung je Sp
 | Und in Überlast? | Es gibt ein Gleichgewicht: ρ = 130 %, 10 Spuren: **24.8 %** brechen ab, die Spuren sind zu 97.8 % ausgelastet. Erlang C hat dort keine Antwort. |
 | Wie nah ist der Grenzwert 1 − 1/ρ? | ρ = 130 %: c = 4 28.5 %, c = 10 24.8 %, c = 50 23.1 %, c = 200 **23.08 %** gegen Grenzwert 23.08 %; ρ = 110 %: 20.9, 15.3, 10.4, 9.2 % gegen 9.1 %. |
 | Stimmt die Simulation? | Bei exponentieller Geduld liegt das Mittel der 20 Läufe in allen 15 Zellen innerhalb von vier Standardfehlern an der Formel. |
-| Zählt die Form der Geduld? | **Ja, nahe 100 % Auslastung.** 50 Spuren, ρ = 100 %, Mittel 5 min: Abbruchquote exponentiell **5.0 %**, gleichverteilt 4.1 %, lognormal 4.4 %, **fest 1.2 %**; mittlere Wartezeit 0.25 / 0.39 / 0.31 / **2.36 min** (fest: das 9-Fache). |
-| Und in starker Überlast? | Kaum: ρ = 130 %: Spannweite der Abbruchquote über die vier Verteilungen 0.2 Prozentpunkte bei 50 Spuren (3.8 Punkte bei ρ = 100 %), 1.9 bei 10 Spuren, 4.3 bei 4 Spuren. |
+| Zählt die Form der Geduld? | **Ja, nahe 100 % Auslastung.** 50 Spuren, ρ = 100 %, Mittel 5 min: Abbruchquote exponentiell **5.0 %**, gleichverteilt 4.1 %, lognormal 4.4 %, **fest 1.2 %**; mittlere Wartezeit 0.25 / 0.40 / 0.31 / **2.39 min** (fest: das 9.5-Fache). |
+| Und in starker Überlast? | Kaum: ρ = 130 %: Spannweite der Abbruchquote über die vier Verteilungen 0.1 Prozentpunkte bei 50 Spuren (3.9 Punkte bei ρ = 100 %), 1.8 bei 10 Spuren, 4.3 bei 4 Spuren. |
 | Wie viele Spuren spart das Warten-Lassen (Ziel höchstens 1 % Abbrecher, Geduld 5 min)? | Angebot a = 10: **15 gegen 18** Spuren ohne Warteplatz (Erlang B), a = 20: 26 gegen 30, a = 50: **57 gegen 64**, a = 100: 108 gegen 117, a = 200: 209 gegen 221. Bei a = 50 nach Geduld 0.25 / 1 / 5 / 60 min: 62 / 60 / 57 / 52 Spuren. |
 | Darf das Angebot die Kapazität übersteigen? | Bei Ziel 5 % Abbrecher: a = 100 braucht nur **98 Spuren**, a = 200 nur **192** (a = 50: genau 50, a = 20: 22). Große Gates dürfen Überlast einplanen. |
 
@@ -62,6 +64,14 @@ Alle Zahlen stehen in `tests/test_claims.py`; Zeiten bei 3 min Abfertigung je Sp
   der Geduld nicht reicht. Die vollständige Studie zeigt, wo: nahe 100 % Auslastung am stärksten, in starker Überlast (ρ = 130 %,
   50 Spuren) praktisch nicht mehr (Tabelle). Die Literatur (Garnett, Mandelbaum, Reiman 2002 für exponentielle Geduld; Zeltyn und
   Mandelbaum 2005 für allgemeine Geduld) wurde nur auf Existenz und Gegenstand geprüft, nicht auf ihre einzelnen Aussagen.
+- **Startverzerrung des leeren Starts gemessen und behoben (2026-10-05):** Vor der Einschwingzeit lag die Anzeige bei großen Gates und kurzen
+  Läufen weit unter der Formel (60 Läufe je Fall, Mittel gegen Formel, jeweils mehrere Standardfehler): 50 Spuren, ρ = 100 %, Geduld 5 min,
+  1 000 Lkw: Abbruchquote 3.9 statt 4.9 %, Wartezeit 0.19 statt 0.25 min, Auslastung 78.6 statt 95.1 %; bei ρ = 150 % und Geduld 30 min
+  Abbruchquote 15.8 statt 33.3 %. Beim Preset „Großes Gate“ (10 000 Lkw) lagen Abbruchquote und Wartezeit im Rauschen (+0.6 %
+  und +0.5 %), die Auslastung aber bei 93.1 statt 95.1 % (Leerstart und Auslaufen nach der letzten Ankunft mitgemittelt). Mit Einschwingzeit
+  (1 000 Lkw, 40 Läufe): Auslastung 95.2 %, Abbruchquote 4.9 %, Wartezeit 0.25 min, bei ρ = 150 %, Geduld 30 min 33.3 % und 9.95 min
+  (Formel 10.0 min). Die vorgerechnete Studie (50 000 Lkw) hat sich dadurch um höchstens 0.2 Prozentpunkte bzw. 1 % in der Wartezeit
+  verschoben (`fest`, 50 Spuren: 2.36 → 2.39 min); ein Gegenlauf mit 150 und 300 min Einschwingzeit ändert die Zellen nicht über das Rauschen hinaus.
 - **Zusätzlich gefunden:** Bei Ziel 5 % darf das Angebot die Kapazität übersteigen (98 Spuren für a = 100), im Plan nicht vorgesehen.
 - **Die Spurbedarf-Suche startet bei ⌈a·(1 − Ziel)⌉:** weniger Spuren kann das Ziel wegen des Durchsatzes nie erreichen; spart
   Rechenzeit und ist im Test an der Minimalität geprüft.
@@ -100,7 +110,7 @@ Kein Folgestück: Form der Geduld über die vier Beispiele hinaus, Wiederkehrer 
 
 ## Tests
 
-116 Tests, rund 50 s: Erlang A gegen die abgeschnittene Kette (auch Überlast), Handwert (c = 1, λ = μ = θ = 1: P(ab) = 1/e), Grenzfälle
+135 Tests, rund 20 s (davon `test_oracle_erlang_a.py`: Durchsatzbilanz am linearen System, große Systeme in Bruchrechnung, Simulation und Messfenster gegen einen Scan-Simulator für alle vier Geduld-Verteilungen): Erlang A gegen die abgeschnittene Kette (auch Überlast), Handwert (c = 1, λ = μ = θ = 1: P(ab) = 1/e), Grenzfälle
 Erlang B und C, Durchsatz-Bilanz, Spurbedarf auf Minimalität, Simulation gegen eine von Hand gerechnete Vier-Lkw-Instanz mit
 Abbruch (Wartezeiten, ∫N dt, ∫Nq dt, Auslastung, Zeit je Zustand, Treppenkurve, verfallener Abbruch-Termin), Geduld-Verteilungen
 (Mittel, Spannweite, Variationskoeffizient, Zufallsverbrauch), Little's Gesetz als Pfadidentität auch in Überlast, Simulation gegen

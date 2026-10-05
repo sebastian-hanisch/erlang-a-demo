@@ -19,6 +19,11 @@ DEFAULT_N = 10000
 SEED_MAX = 999999
 DEFAULT_SEED = 35
 
+# Einschwingzeit des leeren Starts (nicht ausgewertet): mindestens WARM_MIN_FLOOR Minuten, bei großer Geduld das WARM_PATIENCE_FACTOR-Fache
+# der mittleren Geduld (die Schlange braucht so lange, bis ihre Länge im Gleichgewicht ist; gemessen in der README)
+WARM_MIN_FLOOR = 30.0
+WARM_PATIENCE_FACTOR = 5
+
 WINDOW_HOURS = 4                  # Fensterbreite der Treppenkurve N(t)
 WINDOW_STEP_HOURS = 1
 MAX_STATE_SHOWN = 120             # Balken der Verteilung der Zahl im System (darüber zusammengefasst)

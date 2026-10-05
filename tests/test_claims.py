@@ -67,24 +67,24 @@ def test_simulation_with_exponential_patience_matches_the_formula_in_every_study
 
 def test_patience_shape_quoted_in_readme():
     """README (50 Spuren, ρ = 100 %, Mittel 5 min): Abbruchquote exponentiell 5.0 %, gleichverteilt 4.1 %, fest 1.2 %, lognormal 4.4 %;
-    mittlere Wartezeit 0.25 / 0.39 / 2.36 / 0.31 min (fest das 9-Fache der exponentiellen)."""
+    mittlere Wartezeit 0.25 / 0.40 / 2.39 / 0.31 min (fest das 9.5-Fache der exponentiellen)."""
     k = cell(50, 100)
     for kind, expected in (("exp", 0.050), ("uniform", 0.041), ("fest", 0.012), ("lognorm", 0.044)):
         assert k[kind]["p_ab"] == pytest.approx(expected, abs=0.006), kind
     assert k["fest"]["p_ab"] < k["lognorm"]["p_ab"] < k["exp"]["p_ab"] * 1.0 + 0.003 and k["uniform"]["p_ab"] < k["exp"]["p_ab"]
-    assert k["exp"]["wq"] == pytest.approx(0.25, abs=0.03) and k["fest"]["wq"] == pytest.approx(2.36, abs=0.2)
+    assert k["exp"]["wq"] == pytest.approx(0.25, abs=0.03) and k["fest"]["wq"] == pytest.approx(2.39, abs=0.2)
     assert 7 < k["fest"]["wq"] / k["exp"]["wq"] < 12
 
 
 def test_patience_shape_matters_near_full_load_and_hardly_in_heavy_overload():
-    """README: Spannweite der Abbruchquote über die vier Verteilungen: 50 Spuren ρ = 100 %: 3.8 Punkte; ρ = 130 %: 0.2 Punkte;
-    10 Spuren ρ = 130 %: 1.9 Punkte; 4 Spuren ρ = 130 %: 4.3 Punkte."""
+    """README: Spannweite der Abbruchquote über die vier Verteilungen: 50 Spuren ρ = 100 %: 3.9 Punkte; ρ = 130 %: 0.1 Punkte;
+    10 Spuren ρ = 130 %: 1.8 Punkte; 4 Spuren ρ = 130 %: 4.3 Punkte."""
     def spread(c, rho):
         v = [x["p_ab"] for x in cell(c, rho).values()]
         return 100 * (max(v) - min(v))
 
-    assert spread(50, 100) == pytest.approx(3.8, abs=0.8) and spread(50, 130) < 0.7
-    assert spread(10, 130) == pytest.approx(1.9, abs=0.8) and spread(4, 130) == pytest.approx(4.3, abs=0.8)
+    assert spread(50, 100) == pytest.approx(3.9, abs=0.8) and spread(50, 130) < 0.7
+    assert spread(10, 130) == pytest.approx(1.8, abs=0.8) and spread(4, 130) == pytest.approx(4.3, abs=0.8)
     assert spread(50, 100) > 4 * spread(50, 130)
 
 
