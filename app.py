@@ -53,6 +53,17 @@ Kunden abbrechen. **Auch Überlast (Auslastung über 100 %) hat ein Gleichgewich
 selbst begrenzt. Und: **Die Form der Geduld zählt**, nicht nur ihr Mittel.
 """
 )
+
+# erklaerseite:einfach:start (erzeugt von tools/set_demo_explainer.py (Website-Repo) aus tools/content/explainers/erlang-a-abbrecher-erklaert.json, nicht von Hand ändern)
+with st.expander("💬 In einfachen Worten"):
+    st.markdown(
+        """
+Am Gate eines Containerterminals fertigen mehrere Spuren die Lkw ab, alle teilen sich eine Schlange. Echte Fahrer geben auf: Nach einer Weile verlassen sie die Schlange, ohne abgefertigt zu werden, sie **brechen ab**. Das ändert das Bild stark. Die einfache Formel ohne Abbrecher (**Erlang C**) sagt viel zu lange Wartezeiten voraus, weil sie annimmt, dass jeder wartet, bis er dran ist. Mit Abbrechern bleibt die Schlange auch bei Überlast endlich, denn je länger sie ist, desto mehr Lkw fahren weg. Außerdem zählt, wie die Geduld verteilt ist, nicht nur ihr Mittel. Die Demo rechnet das mit Formeln und prüft es mit einer Simulation. Es ist ein vereinfachtes Modell, keine Messung an einem echten Gate.
+
+[Ausführlich und verständlich erklärt, mit Fachteil](https://sebastianhanisch.net/erlang-a-abbrecher-erklaert.html)
+        """
+    )
+# erklaerseite:einfach:end
 st.caption(
     "Viertes Stück der Linie „Warteschlangentheorie und Simulation“, aufbauend auf "
     "[mmc-queue-demo](https://sebastianhanisch-mmc-queue-demo.streamlit.app/) (Erlang C, unendliche Geduld) und "
@@ -276,6 +287,28 @@ st.caption(
 st.markdown("---")
 
 with st.expander("📐 Mathematische Formulierung"):
+    # erklaerseite:lesehilfe:start (erzeugt von tools/set_demo_explainer.py (Website-Repo) aus tools/content/explainers/erlang-a-abbrecher-erklaert.json, nicht von Hand ändern)
+    st.markdown(
+        r"""
+**Lesehilfe.** Gegeben sind die Zahl der Spuren $c$, die Ankunftsrate $\lambda$, die Abfertigungsrate $\mu$ je Spur und die Abbruchrate $\theta$ (Kehrwert der mittleren Geduld). Gesucht sind die Verteilung der Zahl der Lkw im System, die Abbruchquote $P(\text{ab})$ und die mittlere Wartezeit aller Lkw $W_q$.
+
+| Symbol | Bedeutung |
+|---|---|
+| $n$, $k$ | Zahl der Lkw im System (wartend und in Abfertigung), Laufindex |
+| $c$ | Zahl der Spuren |
+| $\lambda$, $\mu$ | Ankunftsrate, Abfertigungsrate je Spur |
+| $\theta$ | Abbruchrate: Kehrwert der mittleren Geduld |
+| $\rho$, $a$ | Auslastung je Spur $\lambda/(c\mu)$, Angebot $\lambda/\mu$ |
+| $d_n$ | Abgangsrate bei $n$ Lkw im System |
+| $p_n$ | Wahrscheinlichkeit, dass $n$ Lkw im System sind (stationär) |
+| $L_q$ | mittlere Schlangenlänge |
+| $W_q$ | mittlere Wartezeit aller Lkw, Abbrecher bis zum Abbruch eingerechnet |
+| $P(\text{ab})$ | Abbruchquote: Anteil der Lkw, die abbrechen |
+
+[Schritt für Schritt erklärt, mit Herleitung und Literatur](https://sebastianhanisch.net/erlang-a-abbrecher-erklaert.html#fachleute)
+        """
+    )
+    # erklaerseite:lesehilfe:end
     st.markdown(
         r"""
 **Modell** (Kendall-Notation M/M/c+M): Poisson-Ankünfte mit Rate $\lambda$, exponentielle Abfertigung mit Rate $\mu$ je Spur, $c$
